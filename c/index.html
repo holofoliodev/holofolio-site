@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Holofolio collection</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0b0c'/%3E%3Crect x='18' y='10' width='28' height='40' rx='4' fill='none' stroke='%23d9a441' stroke-width='4'/%3E%3Cpath d='M24 38 L40 22' stroke='%23d9a441' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0b0b0c; --panel:#151516; --panel2:#1d1c1f; --line:#2a2a2d; --text:#edebe6; --dim:#a9a59c; --gold:#d9a441; --green:#4ade80; --red:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color:var(--gold); }
+  .wrap { max-width:1100px; margin:0 auto; padding:0 16px 64px; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:18px 0; gap:12px; }
+  .brand { color:var(--text); text-decoration:none; font-weight:800; font-size:1.1rem; display:flex; gap:8px; align-items:center; }
+  .brand b { color:var(--gold); }
+  h1 { font-size:clamp(1.5rem, 4vw, 2.2rem); margin:8px 0 4px; letter-spacing:-0.02em; }
+  .stats { display:flex; flex-wrap:wrap; gap:10px 28px; color:var(--dim); margin-bottom:18px; }
+  .stats strong { color:var(--gold); font-size:1.35rem; display:block; line-height:1.1; }
+  .bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0 20px; }
+  input[type=search], input[type=url] { flex:1 1 220px; min-width:0; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; }
+  button { font:inherit; font-weight:700; border-radius:10px; padding:10px 14px; border:1px solid var(--gold); background:var(--gold); color:#111; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--gold); }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .tab { background:var(--panel); color:var(--dim); border:1px solid var(--line); }
+  .tab.on { background:var(--gold); color:#111; border-color:var(--gold); }
+  section.set { margin:26px 0; }
+  .sethead { display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:12px; }
+  .sethead img { height:30px; max-width:110px; object-fit:contain; }
+  .sethead h2 { font-size:1.05rem; margin:0; flex:1; }
+  .sethead span { color:var(--dim); font-size:.9rem; white-space:nowrap; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(118px, 1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px; position:relative; min-width:0; }
+  .card img { width:100%; aspect-ratio:63/88; object-fit:cover; border-radius:6px; background:var(--panel2); display:block; }
+  .ph { width:100%; aspect-ratio:63/88; border-radius:6px; background:var(--panel2); display:grid; place-items:center; color:var(--dim); font-size:.75rem; text-align:center; padding:6px; overflow-wrap:anywhere; }
+  .name { font-size:.8rem; font-weight:700; margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meta { font-size:.72rem; color:var(--dim); display:flex; justify-content:space-between; gap:6px; }
+  .meta b { color:var(--gold); }
+  .qty { position:absolute; top:10px; right:10px; background:var(--gold); color:#111; font-weight:900; font-size:.75rem; border-radius:99px; padding:1px 7px; }
+  .who { position:absolute; top:10px; left:10px; font-weight:800; font-size:.68rem; border-radius:99px; padding:1px 7px; background:#111c; }
+  .empty { padding:40px 0; color:var(--dim); text-align:center; }
+  .note { color:var(--dim); font-size:.85rem; border-left:3px solid var(--gold); background:var(--panel); padding:10px 14px; border-radius:6px; margin-top:26px; }
+  .loading { color:var(--dim); padding:24px 0; }
+  footer { color:var(--dim); font-size:.8rem; margin-top:36px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/">&#9635; <span>Holo<b>folio</b></span></a>
+    <a href="/" style="font-size:.9rem">Get the app</a>
+  </header>
+
+  <div id="app"><p class="loading">Opening the collection…</p></div>
+
+  <p class="note">
+    This collection lives inside the link itself. Nothing is stored on our servers, and only people
+    who have the link can see it. Prices are TCGplayer market prices in US dollars, where available.
+  </p>
+  <footer>Holofolio is an independent app and is not affiliated with Nintendo, Creatures Inc., GAME FREAK inc. or The Pokémon Company.</footer>
+</div>
+
+<script src="share.js"></script>
+<script>
+(function () {
+  const S = window.HoloShare;
+  const app = document.getElementById('app');
+  const API = 'https://api.pokemontcg.io/v2/cards';
+  const setCache = new Map();   // setId -> Promise<Map(cardId -> card)>
+  const PRICE_KEY = {
+    normal: ['normal', 'unlimited'], reverse: ['reverseHolofoil'], holo: ['holofoil', 'unlimitedHolofoil'],
+    firstEdition: ['1stEditionNormal', '1stEdition'], firstEditionHolo: ['1stEditionHolofoil'],
+    shadowless: ['unlimited', 'normal'], shadowlessHolo: ['unlimitedHolofoil', 'holofoil'],
+  };
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = (v) => '$' + (v >= 100 ? v.toFixed(0) : v.toFixed(2));
+
+  function loadSet(setId) {
+    if (setCache.has(setId)) return setCache.get(setId);
+    const p = (async () => {
+      const map = new Map();
+      for (let page = 1; page < 10; page++) {
+        const q = `?q=set.id:${encodeURIComponent(setId)}&page=${page}&pageSize=250&select=id,name,number,images,tcgplayer,set`;
+        let json;
+        try { json = await (await fetch(API + q)).json(); } catch (e) { break; }
+        for (const c of json.data || []) map.set(c.id, c);
+        if (!json.data || json.data.length < 250) break;
+      }
+      return map;
+    })();
+    setCache.set(setId, p);
+    return p;
+  }
+
+  function priceOf(card, variant) {
+    const prices = card && card.tcgplayer && card.tcgplayer.prices;
+    if (!prices) return null;
+    for (const k of PRICE_KEY[variant] || [variant]) {
+      if (prices[k] && prices[k].market != null) return prices[k].market;
+    }
+    return null;
+  }
+
+  async function enrich(rows) {
+    const sets = [...new Set(rows.map((r) => r.setId))];
+    const maps = await Promise.all(sets.map(loadSet));
+    const bySet = new Map(sets.map((s, i) => [s, maps[i]]));
+    return rows.map((r) => {
+      const card = bySet.get(r.setId) && bySet.get(r.setId).get(r.cardId);
+      return { ...r, card, price: priceOf(card, r.variant) };
+    });
+  }
+
+  function cardTile(r, badge) {
+    const img = r.card && r.card.images ? `<img loading="lazy" src="${esc(r.card.images.small)}" alt="${esc(r.card.name)}">`
+      : `<div class="ph">${esc(r.cardId)}</div>`;
+    const variant = r.variant && r.variant !== 'normal' ? ` · ${esc(r.variant.replace(/([A-Z])/g, ' $1').toLowerCase())}` : '';
+    return `<div class="card">${img}
+      ${r.quantity > 1 ? `<span class="qty">×${r.quantity}</span>` : ''}
+      ${badge ? `<span class="who" style="color:${badge[1]}">${esc(badge[0])}</span>` : ''}
+      <div class="name" title="${esc(r.card ? r.card.name : r.cardId)}">${esc(r.card ? r.card.name : r.cardId)}</div>
+      <div class="meta"><span>#${esc(r.card ? r.card.number : '')}${variant}</span><b>${r.price != null ? money(r.price) : ''}</b></div>
+    </div>`;
+  }
+
+  function renderSets(list, filter, badgeOf) {
+    const f = (filter || '').trim().toLowerCase();
+    const shown = f ? list.filter((r) => ((r.card && r.card.name) || r.cardId).toLowerCase().includes(f) || (r.card && r.card.set && r.card.set.name.toLowerCase().includes(f))) : list;
+    if (!shown.length) return '<p class="empty">No cards match.</p>';
+    const groups = new Map();
+    for (const r of shown) {
+      if (!groups.has(r.setId)) groups.set(r.setId, []);
+      groups.get(r.setId).push(r);
+    }
+    const ordered = [...groups.entries()].sort((a, b) => {
+      const da = (a[1][0].card && a[1][0].card.set && a[1][0].card.set.releaseDate) || '';
+      const db = (b[1][0].card && b[1][0].card.set && b[1][0].card.set.releaseDate) || '';
+      return db.localeCompare(da);
+    });
+    return ordered.map(([setId, cards]) => {
+      const set = cards[0].card && cards[0].card.set;
+      const value = cards.reduce((s, r) => s + (r.price || 0) * r.quantity, 0);
+      cards.sort((a, b) => (parseInt(a.card && a.card.number, 10) || 0) - (parseInt(b.card && b.card.number, 10) || 0));
+      return `<section class="set"><div class="sethead">
+          ${set && set.images ? `<img src="${esc(set.images.logo)}" alt="">` : ''}
+          <h2>${esc(set ? set.name : setId)}</h2>
+          <span>${cards.length}${set ? ' of ' + set.printedTotal : ''}${value ? ' · ' + money(value) : ''}</span>
+        </div><div class="grid">${cards.map((r) => cardTile(r, badgeOf && badgeOf(r))).join('')}</div></section>`;
+    }).join('');
+  }
+
+  function totals(list) {
+    return {
+      cards: list.reduce((s, r) => s + r.quantity, 0),
+      value: list.reduce((s, r) => s + (r.price || 0) * r.quantity, 0),
+      sets: new Set(list.map((r) => r.setId)).size,
+    };
+  }
+
+  async function show() {
+    const shared = S.parseShareLink(location.hash);
+    if (!shared) {
+      app.innerHTML = `<h1>Open a collection</h1>
+        <p style="color:var(--dim)">In the Holofolio app, go to Collection and tap Share. Open that link here,
+        or paste it below.</p>
+        <div class="bar"><input id="paste" type="url" placeholder="Paste a Holofolio link"><button id="go">Open</button></div>`;
+      document.getElementById('go').onclick = () => {
+        const p = S.parseShareLink(document.getElementById('paste').value);
+        if (p) { location.hash = document.getElementById('paste').value.split('#')[1]; }
+      };
+      return;
+    }
+    app.innerHTML = '<p class="loading">Loading card details…</p>';
+    const mine = await enrich(shared.rows);
+    const t = totals(mine);
+    const title = shared.title || 'A Holofolio collection';
+    document.title = `${title} · Holofolio`;
+
+    let other = null;
+    let tab = 'all';
+    let filter = '';
+
+    function draw() {
+      let body;
+      if (!other) {
+        body = renderSets(mine, filter);
+      } else {
+        const key = (r) => `${r.cardId}::${r.variant}`;
+        const theirs = new Map(other.list.map((r) => [key(r), r]));
+        const ours = new Map(mine.map((r) => [key(r), r]));
+        const both = mine.filter((r) => theirs.has(key(r)));
+        const onlyA = mine.filter((r) => !theirs.has(key(r)));
+        const onlyB = other.list.filter((r) => !ours.has(key(r)));
+        const pick = { both, a: onlyA, b: onlyB }[tab] || both;
+        const label = { both: 'In both', a: `Only in ${title}`, b: `Only in ${other.title}` };
+        body = `<div class="tabs">
+            ${['both', 'a', 'b'].map((k) => `<button class="tab ${tab === k ? 'on' : ''}" data-tab="${k}">${esc(label[k])} (${{ both, a: onlyA, b: onlyB }[k].length})</button>`).join('')}
+          </div>` + renderSets(pick, filter);
+      }
+      app.innerHTML = `
+        <h1>${esc(title)}</h1>
+        <div class="stats">
+          <div><strong>${t.cards.toLocaleString()}</strong>cards</div>
+          <div><strong>${t.sets}</strong>sets</div>
+          <div><strong>${t.value ? money(t.value) : '—'}</strong>market value</div>
+          ${other ? `<div><strong>${esc(other.title)}</strong>${totals(other.list).cards.toLocaleString()} cards · ${money(totals(other.list).value)}</div>` : ''}
+        </div>
+        <div class="bar">
+          <input id="filter" type="search" placeholder="Search cards or sets" value="${esc(filter)}">
+          ${other ? '<button class="ghost" id="clear">Stop comparing</button>'
+                  : '<input id="cmp" type="url" placeholder="Compare with another Holofolio link"><button id="cmpgo">Compare</button>'}
+        </div>
+        ${body}`;
+      const fi = document.getElementById('filter');
+      fi.oninput = () => { filter = fi.value; const pos = fi.selectionStart; draw(); const n = document.getElementById('filter'); n.focus(); n.setSelectionRange(pos, pos); };
+      const go = document.getElementById('cmpgo');
+      if (go) go.onclick = async () => {
+        const p = S.parseShareLink(document.getElementById('cmp').value);
+        if (!p) { alert('That is not a Holofolio link.'); return; }
+        go.textContent = 'Loading…';
+        other = { title: p.title || 'Other collection', list: await enrich(p.rows) };
+        tab = 'both';
+        draw();
+      };
+      const cl = document.getElementById('clear');
+      if (cl) cl.onclick = () => { other = null; draw(); };
+      app.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { tab = b.dataset.tab; draw(); }; });
+    }
+    draw();
+  }
+
+  window.addEventListener('hashchange', show);
+  show();
+})();
+</script>
+</body>
+</html>
