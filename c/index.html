@@ -82,8 +82,16 @@
       const map = new Map();
       for (let page = 1; page < 10; page++) {
         const q = `?q=set.id:${encodeURIComponent(setId)}&page=${page}&pageSize=250&select=id,name,number,images,tcgplayer,set`;
-        let json;
-        try { json = await (await fetch(API + q)).json(); } catch (e) { break; }
+        let json = null;
+        // The public card API is slow and drops requests under load: retry.
+        for (let attempt = 0; attempt < 4 && !json; attempt++) {
+          if (attempt) await new Promise((r) => setTimeout(r, 1500 * 2 ** (attempt - 1)));
+          try {
+            const res = await fetch(API + q);
+            if (res.ok) json = await res.json();
+          } catch (e) { json = null; }
+        }
+        if (!json) break;
         for (const c of json.data || []) map.set(c.id, c);
         if (!json.data || json.data.length < 250) break;
       }
@@ -104,7 +112,12 @@
 
   async function enrich(rows) {
     const sets = [...new Set(rows.map((r) => r.setId))];
-    const maps = await Promise.all(sets.map(loadSet));
+    // Two sets at a time: gentler on the API than all at once.
+    const maps = new Array(sets.length);
+    let next = 0;
+    await Promise.all([0, 1].map(async () => {
+      while (next < sets.length) { const i = next++; maps[i] = await loadSet(sets[i]); }
+    }));
     const bySet = new Map(sets.map((s, i) => [s, maps[i]]));
     return rows.map((r) => {
       const card = bySet.get(r.setId) && bySet.get(r.setId).get(r.cardId);
@@ -113,14 +126,17 @@
   }
 
   function cardTile(r, badge) {
-    const img = r.card && r.card.images ? `<img loading="lazy" src="${esc(r.card.images.small)}" alt="${esc(r.card.name)}">`
+    // Without details, the image server still has the picture at a known address.
+    const num = r.cardId.startsWith(r.setId + '-') ? r.cardId.slice(r.setId.length + 1) : '';
+    const src = r.card && r.card.images ? r.card.images.small : (num ? `https://images.pokemontcg.io/${encodeURIComponent(r.setId)}/${encodeURIComponent(num)}.png` : '');
+    const img = src ? `<img loading="lazy" src="${esc(src)}" alt="${esc(r.card ? r.card.name : r.cardId)}" onerror="this.outerHTML='<div class=ph>${esc(r.cardId)}</div>'">`
       : `<div class="ph">${esc(r.cardId)}</div>`;
     const variant = r.variant && r.variant !== 'normal' ? ` · ${esc(r.variant.replace(/([A-Z])/g, ' $1').toLowerCase())}` : '';
     return `<div class="card">${img}
       ${r.quantity > 1 ? `<span class="qty">×${r.quantity}</span>` : ''}
       ${badge ? `<span class="who" style="color:${badge[1]}">${esc(badge[0])}</span>` : ''}
       <div class="name" title="${esc(r.card ? r.card.name : r.cardId)}">${esc(r.card ? r.card.name : r.cardId)}</div>
-      <div class="meta"><span>#${esc(r.card ? r.card.number : '')}${variant}</span><b>${r.price != null ? money(r.price) : ''}</b></div>
+      <div class="meta"><span>#${esc(r.card ? r.card.number : num)}${variant}</span><b>${r.price != null ? money(r.price) : ''}</b></div>
     </div>`;
   }
 
